@@ -1,103 +1,174 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import DownloadCSVButton from "./components/DownloadCSVButton";
+
+/* ── helper: try to count <loc> tags in /sitemap.xml ─────────────── */
+async function getPageCountFromSitemap(url) {
+  try {
+    const domain = new URL(url).origin;
+    const res = await fetch(`${domain}/sitemap.xml`);
+    if (!res.ok) return null;
+
+    const text = await res.text();
+    const matches = text.match(/<loc>/g);
+    return matches ? matches.length : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [startUrl, setStartUrl] = useState("");
+  const [maxPages, setMaxPages] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  /* ── form submit: run crawler ──────────────────────────────────── */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startUrl, maxPages: Number(maxPages) }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error || "Request failed");
+      }
+      const data = await res.json();
+      setResult(data.pages);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-6 font-sans">
+      <div className="max-w-6xl mx-auto">
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">
+          🕵️ Website Metadata Scraper
+        </h1>
+
+        {/* ── form ─────────────────────────────────────────────── */}
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white shadow-md rounded p-6 mb-6 space-y-4"
+        >
+          {/* URL input */}
+          <div>
+            <label className="block font-medium text-gray-700 mb-1">
+              Start URL
+            </label>
+            <input
+              type="url"
+              required
+              value={startUrl}
+              onChange={(e) => setStartUrl(e.target.value)}
+              onBlur={async () => {
+                if (!startUrl.startsWith("http")) return;
+                const count = await getPageCountFromSitemap(startUrl);
+                if (count) setMaxPages(count);
+              }}
+              className="w-full border border-gray-300 px-4 py-2 rounded shadow-sm focus:outline-none focus:ring focus:border-blue-400 text-gray-700"
+              placeholder="https://example.com"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          {/* max pages */}
+          <div>
+            <label className="block font-medium text-gray-700 mb-1">
+              Max Pages
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={maxPages}
+              onChange={(e) => setMaxPages(e.target.value)}
+              className="w-24 border border-gray-300 px-4 py-2 rounded shadow-sm focus:outline-none focus:ring focus:border-blue-400 text-gray-700"
+            />
+          </div>
+
+          {/* submit button with spinner */}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`relative px-8 py-2 text-white font-semibold rounded ${
+              loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            {loading && (
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 inline-block h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            )}
+            {loading ? "Crawling…" : "Start Crawl"}
+          </button>
+
+          {error && <p className="text-red-600 mt-2 font-medium">⚠️ {error}</p>}
+        </form>
+
+        {/* ── results table ────────────────────────────────────── */}
+        {result && (
+          <div className="bg-white shadow-md rounded p-6">
+            <h2 className="text-xl text-gray-700 font-semibold mb-4">
+              ✅ Found {result.length} page{result.length > 1 ? "s" : ""}
+            </h2>
+
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="min-w-full bg-white border border-gray-200 text-gray-700 rounded shadow-sm text-sm">
+                <thead className="bg-gray-100 font-semibold">
+                  <tr>
+                    <th className="px-4 py-2 border text-left">URL</th>
+                    <th className="px-4 py-2 border text-left">Title</th>
+                    <th className="px-4 py-2 border text-left">
+                      Meta keywords
+                    </th>
+                    <th className="px-4 py-2 border text-left">
+                      Meta Description
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.map((page, i) => (
+                    <tr key={i} className="hover:bg-gray-50 align-top">
+                      <td className="px-4 py-2 border text-blue-700 break-words text-left">
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {page.url}
+                        </a>
+                      </td>
+                      <td className="px-4 py-2 border text-left">
+                        {page.title || "—"}
+                      </td>
+                      <td className="px-4 py-2 border text-left">
+                        {page.meta?.keywords || "—"}
+                      </td>
+                      <td className="px-4 py-2 border text-left">
+                        {page.meta?.description || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* download csv */}
+            <div className="flex justify-end mt-4">
+              <DownloadCSVButton data={result} filename="metadata.csv" />
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
