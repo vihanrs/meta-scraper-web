@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DownloadCSVButton from "./components/DownloadCSVButton";
 
 /* ── helper: try to count <loc> tags in /sitemap.xml ─────────────── */
 async function getPageCountFromSitemap(url) {
   try {
-    const domain = new URL(url).origin;
-    const res = await fetch(`${domain}/sitemap.xml`);
+    const res = await fetch("/api/sitemap-count", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
     if (!res.ok) return null;
-
-    const text = await res.text();
-    const matches = text.match(/<loc>/g);
-    return matches ? matches.length : null;
+    const data = await res.json();
+    return data.count ?? null;
   } catch {
     return null;
   }
@@ -24,6 +25,25 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [sitemapLoading, setSitemapLoading] = useState(false);
+  const [sitemapError, setSitemapError] = useState("");
+
+  useEffect(() => {
+    if (!startUrl || !startUrl.startsWith("http")) return;
+    setSitemapError("");
+    setSitemapLoading(true);
+    const handler = setTimeout(async () => {
+      const count = await getPageCountFromSitemap(startUrl);
+      if (count) {
+        setMaxPages(count);
+        setSitemapError("");
+      } else {
+        setSitemapError("Could not fetch sitemap or no <loc> tags found.");
+      }
+      setSitemapLoading(false);
+    }, 600);
+    return () => clearTimeout(handler);
+  }, [startUrl]);
 
   /* ── form submit: run crawler ──────────────────────────────────── */
   const handleSubmit = async (e) => {
@@ -73,14 +93,18 @@ export default function Home() {
               required
               value={startUrl}
               onChange={(e) => setStartUrl(e.target.value)}
-              onBlur={async () => {
-                if (!startUrl.startsWith("http")) return;
-                const count = await getPageCountFromSitemap(startUrl);
-                if (count) setMaxPages(count);
-              }}
               className="w-full border border-gray-300 px-4 py-2 rounded shadow-sm focus:outline-none focus:ring focus:border-blue-400 text-gray-700"
               placeholder="https://example.com"
             />
+            {sitemapLoading && (
+              <div className="text-blue-600 text-sm mt-1 flex items-center">
+                <span className="inline-block h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mr-2"></span>
+                Fetching page count from sitemap…
+              </div>
+            )}
+            {sitemapError && (
+              <div className="text-red-600 text-sm mt-1">⚠️ {sitemapError}</div>
+            )}
           </div>
 
           {/* max pages */}
